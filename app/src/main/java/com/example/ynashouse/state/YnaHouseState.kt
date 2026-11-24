@@ -58,6 +58,8 @@ class YnaHouseState(private val prefs: SharedPreferences) {
         private set
     var foodMood by mutableStateOf("")             // food mood terakhir dari gacha (contoh "I want ricee")
         private set
+    var foodMoodBefore by mutableStateOf("")       // food mood sebelum tu (pelawat nampak 1-2 terkini)
+        private set
 
     private var lastUpdate = System.currentTimeMillis()
 
@@ -74,6 +76,7 @@ class YnaHouseState(private val prefs: SharedPreferences) {
         tummy = prefs.getFloat("tummy", 70f)
         rest = prefs.getFloat("rest", 70f)
         foodMood = prefs.getString("foodMood", "") ?: ""
+        foodMoodBefore = prefs.getString("foodMoodBefore", "") ?: ""
         lastUpdate = prefs.getLong("lastUpdate", System.currentTimeMillis())
     }
 
@@ -84,6 +87,7 @@ class YnaHouseState(private val prefs: SharedPreferences) {
             putFloat("tummy", tummy)
             putFloat("rest", rest)
             putString("foodMood", foodMood)
+            putString("foodMoodBefore", foodMoodBefore)
             putLong("lastUpdate", lastUpdate)
         }
     }
@@ -110,7 +114,7 @@ class YnaHouseState(private val prefs: SharedPreferences) {
         rest -= dropPerHour * hours
         // bilik "me time" dan makan naikkan meter sendiri
         when (mood) {
-            Mood.WATCHING, Mood.SLEEPING -> rest += restUpPerHour * hours
+            Mood.WATCHING, Mood.SLEEPING, Mood.MUSIC, Mood.CHILLING -> rest += restUpPerHour * hours   // me time
             Mood.EATING, Mood.STRESS_EATING -> tummy += tummyUpPerHour * hours
             else -> Unit
         }
@@ -132,6 +136,7 @@ class YnaHouseState(private val prefs: SharedPreferences) {
     fun changeMood(newMood: Mood) {
         tick()
         mood = newMood
+        if (newMood == Mood.SLEEPING) need = null      // tidur: tiada minta perhatian
         save()
     }
 
@@ -146,7 +151,19 @@ class YnaHouseState(private val prefs: SharedPreferences) {
 
     /* Food mood terakhir (dari gacha) */
     fun saveFoodMood(text: String) {
+        if (text == foodMood) return
+        foodMoodBefore = foodMood          // yang lama jadi "before"
         foodMood = text
+        save()
+    }
+
+    /* Care dari pelawat website (dapat dari HouseSync) — terus tambah ke meter */
+    fun addVisitorCare(happy: Int, tummyUp: Int, restUp: Int) {
+        if (happy == 0 && tummyUp == 0 && restUp == 0) return
+        happiness += happy
+        tummy += tummyUp
+        rest += restUp
+        clampMeters()
         save()
     }
 

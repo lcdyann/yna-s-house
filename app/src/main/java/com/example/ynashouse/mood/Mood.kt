@@ -15,5 +15,9 @@ enum class Mood(
     GAMING("Gaming", "🎮", "I'm gaming now"),
     STRESS_EATING("Stress eating", "🍟", "I'm stress eating"),
     EATING("Eating", "🍽️", "I'm eating now"),
-    SLEEPING("Sleeping", "😴", "Me time: sleeping")
+    SLEEPING("Sleeping", "😴", "Me time: sleeping"),
+    MUSIC("Listening to music", "🎧", "Me time: vibing to music"),  // Music room
+    OUT("Going out", "🚶", "Out & about"),                            // Outside (luar rumah)
+    CHILLING("Chilling", "🌿", "Me time: chilling on the balcony")   // Balcony
+    // (mood baru sentiasa tambah di HUJUNG senarai supaya mood yang dah disimpan tak bertukar)
 }

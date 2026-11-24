@@ -9,15 +9,20 @@ import androidx.compose.ui.unit.sp
 /*
  * TYPE.KT
  * Saiz & tebal tulisan.
- * Nak guna font comel (contoh Fredoka): letak fail .ttf dalam res/font,
- * kemudian tukar FontFamily.Default kepada FontFamily(Font(R.font.fredoka)).
+ * Font comel: letak fail bernama "fredoka.ttf" dalam app/src/main/res/font/
+ * (buat folder font kalau tiada). Theme.kt akan jumpa sendiri — tak perlu ubah kod.
+ * Muat turun Fredoka percuma: fonts.google.com/specimen/Fredoka
  */
-val YnaFont = FontFamily.Default
-
-val YnaTypography = Typography(
-    titleLarge = TextStyle(fontFamily = YnaFont, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, color = Ink),
-    titleMedium = TextStyle(fontFamily = YnaFont, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Ink),
-    bodyMedium = TextStyle(fontFamily = YnaFont, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Ink),
-    labelLarge = TextStyle(fontFamily = YnaFont, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink),
-    labelSmall = TextStyle(fontFamily = YnaFont, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = InkSoft)
+fun ynaTypography(font: FontFamily) = Typography(
+    headlineMedium = TextStyle(fontFamily = font, fontWeight = FontWeight.ExtraBold, fontSize = 28.sp, color = Ink),
+    titleLarge = TextStyle(fontFamily = font, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, color = Ink),
+    titleMedium = TextStyle(fontFamily = font, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Ink),
+    bodyMedium = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Ink),
+    bodySmall = TextStyle(fontFamily = font, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = InkSoft),
+    labelLarge = TextStyle(fontFamily = font, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink),
+    labelMedium = TextStyle(fontFamily = font, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Ink),
+    labelSmall = TextStyle(fontFamily = font, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = InkSoft)
 )
+
+/* font biasa (sebelum fredoka.ttf dimasukkan) */
+val YnaTypography = ynaTypography(FontFamily.Default)

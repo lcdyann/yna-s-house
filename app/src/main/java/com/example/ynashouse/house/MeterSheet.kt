@@ -26,6 +26,8 @@ import com.example.ynashouse.ui.bubble.BubbleCard
 import com.example.ynashouse.ui.theme.BubbleGreen
 import com.example.ynashouse.ui.theme.HappyColor
 import com.example.ynashouse.ui.theme.Ink
+import com.example.ynashouse.ui.theme.Pink
+import com.example.ynashouse.ui.theme.Cream
 import com.example.ynashouse.ui.theme.RestColor
 import com.example.ynashouse.ui.theme.TummyColor
 
@@ -40,7 +42,7 @@ fun MeterSheet(state: YnaHouseState, onClose: () -> Unit) {
     var rest by remember { mutableFloatStateOf(state.rest) }
 
     Dialog(onDismissRequest = onClose) {
-        BubbleCard(modifier = Modifier.fillMaxWidth()) {
+        BubbleCard(modifier = Modifier.fillMaxWidth(), color = Cream) {
             Column(
                 modifier = Modifier.padding(6.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -66,7 +68,7 @@ fun MeterSheet(state: YnaHouseState, onClose: () -> Unit) {
 }
 
 @Composable
-private fun MeterSlider(label: String, value: Float, color: Color, onChange: (Float) -> Unit) {
+fun MeterSlider(label: String, value: Float, color: Color, onChange: (Float) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(118.dp))
         Slider(
@@ -74,7 +76,7 @@ private fun MeterSlider(label: String, value: Float, color: Color, onChange: (Fl
             onValueChange = onChange,
             valueRange = 0f..100f,
             colors = SliderDefaults.colors(
-                thumbColor = Ink,
+                thumbColor = Pink,
                 activeTrackColor = color,
                 inactiveTrackColor = color.copy(alpha = 0.3f)
             ),

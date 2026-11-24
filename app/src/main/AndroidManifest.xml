@@ -4,7 +4,7 @@
 
     <!-- internet: cari kedai makan (OpenStreetMap) -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- lokasi: cari kedai berdekatan untuk gacha -->
+    <!-- lokasi: cari kedai berdekatan untuk gacha + cuaca sebenar -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
@@ -28,6 +28,31 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- baca lagu yang sedang dimainkan (Spotify) untuk TV dalam Music room.
+             Diyana perlu benarkan sekali: Settings → Notification access → Yna's House -->
+        <service
+            android:name=".music.YnaMusicListener"
+            android:exported="false"
+            android:label="Yna's House music"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- widget skrin utama: Yna + bilik + meter + craving (widget/YnaWidget.kt) -->
+        <receiver
+            android:name=".widget.YnaWidget"
+            android:exported="false"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/yna_widget_info" />
+        </receiver>
     </application>
 
 </manifest>

@@ -4,6 +4,7 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -52,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.ynashouse.R
+import com.example.ynashouse.state.LocalVisitorMode
 import com.example.ynashouse.state.YnaHouseState
 import com.example.ynashouse.ui.bubble.BubbleButton
 import com.example.ynashouse.ui.bubble.BubbleCard
@@ -61,9 +63,16 @@ import com.example.ynashouse.ui.theme.BubblePink
 import com.example.ynashouse.ui.theme.BubbleYellow
 import com.example.ynashouse.ui.theme.Cream
 import com.example.ynashouse.ui.theme.Ink
+import com.example.ynashouse.ui.theme.deepOf
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import com.example.ynashouse.ui.theme.InkSoft
 import com.example.ynashouse.ui.theme.Pink
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.net.URLEncoder
@@ -86,6 +95,7 @@ fun GachaScreen(state: YnaHouseState, onClose: () -> Unit) {
     val context = LocalContext.current
     val links = LocalUriHandler.current
     val scope = rememberCoroutineScope()
+    val visitor = LocalVisitorMode.current      // pelawat: gacha untuk diri sendiri, tak tukar food mood Diyana
 
     var step by remember { mutableStateOf(Step.PICK) }
     val picked = remember { mutableStateListOf<FoodMood>() }
@@ -97,11 +107,13 @@ fun GachaScreen(state: YnaHouseState, onClose: () -> Unit) {
     val seen = remember { mutableStateListOf<String>() }
     var chosen by remember { mutableStateOf<Place?>(null) }
     var problem by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf("Ooh spinning… 🎰") }   // langkah carian sekarang
+    var searchJob by remember { mutableStateOf<Job?>(null) }        // carian yang sedang berjalan (untuk Cancel)
 
-    // animasi kapsul
-    val drop = remember { Animatable(-260f) }
-    val wobble = remember { Animatable(0f) }
-    val open = remember { Animatable(0f) }
+    // animasi mesin MAMAM♥TIME (token masuk, mesin pusing, kapsul keluar)
+    val machine = rememberMachineAnim()
+    var tokenRolling by remember { mutableStateOf(false) }          // true = "Clink! Token in…"
+    val scroll = rememberScrollState()
 
     /* pilih kedai random: yang belum keluar, yang confirm buka didahulukan */
     fun pickPlace(): Place {
@@ -116,31 +128,34 @@ fun GachaScreen(state: YnaHouseState, onClose: () -> Unit) {
         return place
     }
 
-    /* animasi kapsul jatuh & terbuka, lepas tu tunjuk kad */
-    suspend fun capsuleAnimation() {
-        open.snapTo(0f)
-        drop.snapTo(-260f)
-        repeat(3) {
-            wobble.animateTo(10f, tween(90))
-            wobble.animateTo(-10f, tween(90))
-        }
-        wobble.animateTo(0f, tween(90))
-        drop.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
-        delay(250)
-        open.animateTo(1f, tween(450))
+    /* tunjuk kad kedai & skrol ke bawah supaya kad nampak */
+    suspend fun showResult() {
+        step = Step.RESULT
+        delay(150)
+        scroll.animateScrollTo(scroll.maxValue)
     }
 
-    /* PULL: cari kedai sambil animasi */
+    /* PULL: cari kedai. Kapsul terus berguling sampai carian siap (paling lama 40 saat) */
     fun pull() {
-        token = picked.toList().ifEmpty { listOf(FOOD_MOODS.random()) }   // tiada mood: Yna pilih
-        state.saveFoodMood(token.joinToString(" + ") { it.phrase })
+        if (picked.isNotEmpty() || token.isEmpty()) {
+            token = picked.toList().ifEmpty { listOf(FOOD_MOODS.random()) }   // tiada mood: Yna pilih
+        }
+        if (!visitor) state.saveFoodMood(token.joinToString(" + ") { it.phrase })
         step = Step.SPIN
+        status = "Ooh spinning… 🎰"
         seen.clear()
-        scope.launch {
+        searchJob = scope.launch {
             val search = async {
-                runCatching { findPlaces(context, token, km) }
+                runCatching { withTimeout(40_000L) { findPlaces(context, token, km) { status = it } } }
             }
-            capsuleAnimation()
+            // token bergolek masuk, kemudian mesin berpusing selagi masih mencari
+            machine.reset()
+            scroll.animateScrollTo(0)
+            tokenRolling = true
+            machine.insertToken()
+            tokenRolling = false
+            machine.spinUntil { search.isCompleted }
+
             val result = search.await()
             result.onSuccess { found ->
                 usingBackup = found.list.isEmpty() && found.backup.isNotEmpty()
@@ -150,26 +165,38 @@ fun GachaScreen(state: YnaHouseState, onClose: () -> Unit) {
                     step = Step.PROBLEM
                 } else {
                     chosen = pickPlace()
-                    step = Step.RESULT
+                    machine.dropCapsule()               // kapsul keluar & terbuka bila jumpa kedai
+                    machine.openCapsule()
+                    showResult()
                 }
             }.onFailure { error ->
-                problem = if (error is NoLocationException) {
-                    "I need your location to find food near you 🥺 Please turn on location and try again."
-                } else {
-                    "Can't reach the food map right now. Check your internet and try again."
+                problem = when (error) {
+                    is NoLocationException ->
+                        "I can't find where you are 🥺 Turn on Location (GPS) in your phone settings and try again."
+                    is TimeoutCancellationException ->
+                        "The food map is taking too long to answer 🥺 Please try again in a bit."
+                    is NoPlacesException ->
+                        if (error.total > 0) "Found ${error.total} places within ${km.toInt()} km, but none are open now 😢"
+                        else "No food places on the map within ${km.toInt()} km 😢 Try a bigger distance."
+                    else ->
+                        "Can't reach the food map right now 🥺 Check your internet and try again.\n(${error.message})"
                 }
                 step = Step.PROBLEM
             }
         }
     }
 
-    /* Nope: kapsul baru */
+    /* Nope: mesin pusing lagi, kapsul baru (token sama) */
     fun nope() {
         step = Step.SPIN
+        status = "Hmm, something else then…"
         scope.launch {
-            capsuleAnimation()
+            scroll.animateScrollTo(0)
+            machine.spinUntil { true }
             chosen = pickPlace()
-            step = Step.RESULT
+            machine.dropCapsule()
+            machine.openCapsule()
+            showResult()
         }
     }
 
@@ -197,10 +224,10 @@ fun GachaScreen(state: YnaHouseState, onClose: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFFBE3F3))
+                .background(Brush.verticalGradient(listOf(Color(0xFFFFE1F0), Color(0xFFFFF4E0))))
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scroll)
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -212,7 +239,7 @@ fun GachaScreen(state: YnaHouseState, onClose: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 BubbleCard(modifier = Modifier.weight(1f)) {
-                    Text("🎰 MAKAN♥PON", style = MaterialTheme.typography.titleMedium, color = Pink)
+                    Text("🎰 MAMAM♥TIME", style = MaterialTheme.typography.titleMedium, color = Pink)
                 }
                 BubbleButton(text = "✕", onClick = onClose, color = BubblePink, modifier = Modifier.width(58.dp))
             }
@@ -227,21 +254,50 @@ fun GachaScreen(state: YnaHouseState, onClose: () -> Unit) {
             }
             val ynaLine = when (step) {
                 Step.PICK -> "What are we craving? Pick 1 or 2 🥺"
-                Step.SPIN -> "Ooh spinning… 🎰"
+                Step.SPIN -> if (tokenRolling) "Clink! Token in… ♥" else status
                 Step.RESULT -> if (usingBackup) "Couldn't find exactly that… but how about this?" else "The gacha picked! 😍"
                 Step.GO -> "Let's makan! 💖"
                 Step.PROBLEM -> "Oh no…"
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Image(painterResource(ynaPic), contentDescription = "Yna", modifier = Modifier.size(110.dp))
-                BubbleCard(modifier = Modifier.weight(1f), color = Color.White) {
-                    Text(ynaLine, style = MaterialTheme.typography.bodyMedium)
+            val atMachine = step == Step.SPIN || step == Step.RESULT
+            if (atMachine) {
+                // bubble sahaja (Yna duduk sebelah mesin di bawah)
+                BubbleCard(color = Color.White) {
+                    Text(ynaLine, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+                }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Image(painterResource(ynaPic), contentDescription = "Yna", modifier = Modifier.size(110.dp))
+                    BubbleCard(modifier = Modifier.weight(1f), color = Color.White) {
+                        Text(ynaLine, style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
 
             when (step) {
                 // ---------- PICK: mood token ----------
                 Step.PICK -> {
+                    // food mood Diyana (1-2 terkini) — pelawat boleh pilih sama
+                    if (state.foodMood.isNotEmpty()) {
+                        BubbleCard(modifier = Modifier.fillMaxWidth(), color = Color.White) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("Yna's craving", style = MaterialTheme.typography.labelSmall)
+                                Text(state.foodMood, style = MaterialTheme.typography.titleMedium, color = Pink)
+                                if (state.foodMoodBefore.isNotEmpty()) {
+                                    Text("before: ${state.foodMoodBefore}", style = MaterialTheme.typography.bodySmall)
+                                }
+                                val herMoods = FOOD_MOODS.filter { it.phrase in state.foodMood.split(" + ") }.take(2)
+                                if (herMoods.isNotEmpty()) {
+                                    BubbleButton(
+                                        text = if (visitor) "Crave the same as Yna" else "Same as last time",
+                                        onClick = { picked.clear(); picked.addAll(herMoods) },
+                                        color = BubblePink,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+                        }
+                    }
                     FOOD_MOODS.chunked(2).forEach { pair ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             pair.forEach { mood ->
@@ -276,27 +332,48 @@ fun GachaScreen(state: YnaHouseState, onClose: () -> Unit) {
                                 onValueChange = { km = it },
                                 valueRange = 1f..10f,
                                 steps = 8,
-                                colors = SliderDefaults.colors(thumbColor = Ink, activeTrackColor = Pink)
+                                colors = SliderDefaults.colors(thumbColor = Pink, activeTrackColor = Pink)
                             )
                             Text("Only places open now ♥", style = MaterialTheme.typography.labelSmall)
                         }
                     }
-                    BubbleButton(
-                        text = if (picked.isEmpty()) "⚡ TOO HANGRY · JUST PICK" else "PULL! LET'S EAT ▶",
-                        onClick = { startPull() },
-                        color = if (picked.isEmpty()) BubblePink else BubbleYellow,
-                        modifier = Modifier.fillMaxWidth()
+                    // butang gacha comel: pusing tombol = tarik (token baru setiap kali)
+                    GachaKnob(
+                        label = if (picked.isEmpty()) "Too hangry · just pick!" else "PULL! Let's eat",
+                        onPull = { token = emptyList(); startPull() }
                     )
                 }
 
-                // ---------- SPIN / RESULT: kapsul ----------
+                // ---------- SPIN / RESULT: mesin MAMAM♥TIME ----------
                 Step.SPIN, Step.RESULT -> {
-                    Capsule(
-                        color = token.firstOrNull()?.color ?: BubbleYellow,
-                        drop = drop.value,
-                        wobble = wobble.value,
-                        open = open.value
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)
+                    ) {
+                        // Yna tengok mesin (melantun sikit)
+                        Image(
+                            painterResource(ynaPic),
+                            contentDescription = "Yna",
+                            modifier = Modifier
+                                .padding(top = 150.dp)
+                                .size(100.dp)
+                        )
+                        MakanponMachine(
+                            anim = machine,
+                            tokenText = token.joinToString(" ") { it.emoji },
+                            ballColor = token.firstOrNull()?.color ?: BubbleYellow
+                        )
+                    }
+                    // masa mencari: boleh batal
+                    if (step == Step.SPIN && searchJob?.isActive == true) {
+                        BubbleButton(
+                            "Cancel",
+                            onClick = { searchJob?.cancel(); step = Step.PICK },
+                            color = Cream,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     val place = chosen
                     if (step == Step.RESULT && place != null) {
                         PlaceCard(place = place, tokenText = token.joinToString(" + ") { it.phrase })
@@ -358,7 +435,8 @@ fun GachaScreen(state: YnaHouseState, onClose: () -> Unit) {
                             color = BubbleBlue, modifier = Modifier.fillMaxWidth()
                         )
                     }
-                    BubbleButton("← New token", onClick = { step = Step.PICK }, modifier = Modifier.fillMaxWidth())
+                    BubbleButton("↺ Try again", onClick = { startPull() }, color = BubbleYellow, modifier = Modifier.fillMaxWidth())
+                    BubbleButton("← New token", onClick = { step = Step.PICK }, color = Cream, modifier = Modifier.fillMaxWidth())
                 }
             }
         }
@@ -371,10 +449,12 @@ fun GachaScreen(state: YnaHouseState, onClose: () -> Unit) {
 private fun MoodChip(mood: FoodMood, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Row(
         modifier = modifier
-            .height(48.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(mood.color)
-            .border(if (selected) 4.dp else 2.dp, if (selected) Pink else Ink, RoundedCornerShape(14.dp))
+            .height(50.dp)
+            .scale(if (selected) 1.03f else 1f)
+            .shadow(if (selected) 8.dp else 3.dp, RoundedCornerShape(50), ambientColor = deepOf(mood.color), spotColor = deepOf(mood.color))
+            .clip(RoundedCornerShape(50))
+            .background(Brush.verticalGradient(listOf(mood.color, deepOf(mood.color))))
+            .border(if (selected) 3.dp else 2.dp, if (selected) Pink else Color.White, RoundedCornerShape(50))
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -385,55 +465,16 @@ private fun MoodChip(mood: FoodMood, selected: Boolean, modifier: Modifier, onCl
     }
 }
 
-/* ---------- kapsul gacha (atas warna mood, bawah krim) ---------- */
-@Composable
-private fun Capsule(color: Color, drop: Float, wobble: Float, open: Float) {
-    Box(
-        modifier = Modifier
-            .size(140.dp)
-            .offset(y = drop.dp)
-            .graphicsLayer { rotationZ = wobble },
-        contentAlignment = Alignment.Center
-    ) {
-        // separuh atas: terbang ke atas & senget bila terbuka
-        Box(
-            Modifier
-                .size(width = 110.dp, height = 55.dp)
-                .offset(y = (-27.5).dp)
-                .graphicsLayer {
-                    translationY = -60f * open
-                    rotationZ = -25f * open
-                }
-                .clip(RoundedCornerShape(topStart = 55.dp, topEnd = 55.dp))
-                .background(color)
-                .border(4.dp, Ink, RoundedCornerShape(topStart = 55.dp, topEnd = 55.dp))
-        )
-        // separuh bawah
-        Box(
-            Modifier
-                .size(width = 110.dp, height = 55.dp)
-                .offset(y = 27.5.dp)
-                .graphicsLayer {
-                    translationY = 25f * open
-                    rotationZ = 12f * open
-                }
-                .clip(RoundedCornerShape(bottomStart = 55.dp, bottomEnd = 55.dp))
-                .background(Cream)
-                .border(4.dp, Ink, RoundedCornerShape(bottomStart = 55.dp, bottomEnd = 55.dp))
-        )
-    }
-}
-
 /* ---------- kad kedai ---------- */
 @Composable
 private fun PlaceCard(place: Place, tokenText: String) {
-    BubbleCard(modifier = Modifier.fillMaxWidth()) {
+    BubbleCard(modifier = Modifier.fillMaxWidth(), color = Color.White) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 tokenText,
                 style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(50))
                     .background(BubbleYellow)
                     .padding(horizontal = 8.dp, vertical = 2.dp)
             )

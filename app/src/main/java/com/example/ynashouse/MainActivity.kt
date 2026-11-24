@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import com.example.ynashouse.house.HouseScreen
 import com.example.ynashouse.state.YnaHouseState
 import com.example.ynashouse.ui.theme.YnasHouseTheme
+import com.example.ynashouse.widget.YnaWidget
 
 /*
  * MAINACTIVITY.KT
@@ -35,5 +36,6 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         yna.save()
+        YnaWidget.refresh(this)      // widget skrin utama ikut data terbaru
     }
 }

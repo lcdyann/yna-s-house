@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Yna\'s House</string>
+    <!-- penerangan widget dalam senarai widget phone -->
+    <string name="widget_description">See which room Yna is in, her mood meters and craving</string>
 </resources>

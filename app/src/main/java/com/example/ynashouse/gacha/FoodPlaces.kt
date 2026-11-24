@@ -7,6 +7,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import android.os.Looper
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -61,6 +62,8 @@ data class Place(
 data class PlaceResult(val list: List<Place>, val backup: List<Place>)
 
 class NoLocationException : Exception()
+/* total = berapa kedai jumpa (semua tutup kalau > 0) */
+class NoPlacesException(val total: Int) : Exception()
 
 /* ---------- 1. Lokasi phone ---------- */
 @SuppressLint("MissingPermission")    // kebenaran diminta dalam GachaScreen sebelum panggil ni
@@ -100,8 +103,10 @@ suspend fun getLocation(context: Context): Location? = withContext(Dispatchers.M
 /* ---------- 2. Kedai dari OpenStreetMap ---------- */
 private val OVERPASS_SERVERS = listOf(
     "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter"
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter"
 )
+private const val TAG = "YnaGacha"     // tapis Logcat dengan perkataan ni untuk lihat apa berlaku
 
 suspend fun loadPlaces(here: Location, km: Float): List<Place> = withContext(Dispatchers.IO) {
     val query = "[out:json][timeout:25];" +
@@ -114,19 +119,23 @@ suspend fun loadPlaces(here: Location, km: Float): List<Place> = withContext(Dis
             val conn = URL(server).openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.doOutput = true
-            conn.connectTimeout = 15_000
-            conn.readTimeout = 30_000
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 20_000
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
             conn.setRequestProperty("User-Agent", "YnasHouse/1.0")
             conn.outputStream.use { it.write(("data=" + URLEncoder.encode(query, "UTF-8")).toByteArray()) }
-            if (conn.responseCode == 200) {
+            val code = conn.responseCode
+            Log.d(TAG, "$server -> HTTP $code")
+            if (code == 200) {
                 val text = conn.inputStream.bufferedReader().use { it.readText() }
                 conn.disconnect()
-                return@withContext parsePlaces(text, here)
+                val found = parsePlaces(text, here)
+                Log.d(TAG, "found ${found.size} places")
+                return@withContext found
             }
             conn.disconnect()
         } catch (e: Exception) {
-            // cuba server seterusnya
+            Log.w(TAG, "$server failed: ${e.message}")      // cuba server seterusnya
         }
     }
     throw IOException("no-internet")
@@ -248,9 +257,21 @@ fun matchesMood(place: Place, mood: FoodMood): Boolean {
 }
 
 /* ---------- 5. findPlaces ---------- */
-suspend fun findPlaces(context: Context, moods: List<FoodMood>, km: Float): PlaceResult {
+suspend fun findPlaces(
+    context: Context,
+    moods: List<FoodMood>,
+    km: Float,
+    onStatus: (String) -> Unit = {}      // beritahu skrin langkah sekarang
+): PlaceResult {
+    onStatus("📍 Finding where you are…")
     val here = getLocation(context) ?: throw NoLocationException()
-    val near = loadPlaces(here, km).filter { it.km <= km && it.openNow != false }   // buang yang confirm tutup
+    Log.d(TAG, "location ${here.latitude}, ${here.longitude}")
+
+    onStatus("🔎 Looking for food near you…")
+    val all = loadPlaces(here, km)
+    if (all.isEmpty()) throw NoPlacesException(0)
+    val near = all.filter { it.km <= km && it.openNow != false }   // buang yang confirm tutup
+    if (near.isEmpty()) throw NoPlacesException(all.size)
     val list = near.filter { place -> moods.any { matchesMood(place, it) } }
     return PlaceResult(list = list, backup = near)
 }

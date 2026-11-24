@@ -1,5 +1,7 @@
 package com.example.ynashouse.watch
 
+import com.example.ynashouse.posters.PosterStore
+
 import android.content.SharedPreferences
 import androidx.compose.runtime.mutableStateListOf
 import androidx.core.content.edit
@@ -40,7 +42,8 @@ data class Show(
     val title: String,
     val kind: ShowKind,
     val reaction: Reaction,
-    val status: ShowStatus
+    val status: ShowStatus,
+    val poster: String? = null      // laluan fail poster dalam phone (null = belum ada)
 )
 
 class WatchListStore(private val prefs: SharedPreferences) {
@@ -59,15 +62,21 @@ class WatchListStore(private val prefs: SharedPreferences) {
             save()
             return
         }
-        val array = JSONArray(saved)
-        for (i in 0 until array.length()) {
-            val o = array.getJSONObject(i)
-            shows += Show(
-                title = o.getString("title"),
-                kind = ShowKind.valueOf(o.getString("kind")),
-                reaction = Reaction.valueOf(o.getString("reaction")),
-                status = ShowStatus.valueOf(o.getString("status"))
-            )
+        // kalau data rosak, jangan crash — mula dengan senarai kosong
+        try {
+            val array = JSONArray(saved)
+            for (i in 0 until array.length()) {
+                val o = array.getJSONObject(i)
+                shows += Show(
+                    title = o.getString("title"),
+                    kind = ShowKind.valueOf(o.getString("kind")),
+                    reaction = Reaction.valueOf(o.getString("reaction")),
+                    status = ShowStatus.valueOf(o.getString("status")),
+                    poster = o.optString("poster").ifEmpty { null }
+                )
+            }
+        } catch (e: Exception) {
+            shows.clear()
         }
     }
 
@@ -78,7 +87,21 @@ class WatchListStore(private val prefs: SharedPreferences) {
 
     fun remove(show: Show) {
         shows.remove(show)
+        PosterStore.delete(show.poster)
         save()
+    }
+
+    /* letak / tukar poster cerita (cari ikut tajuk sebab objek Show mungkin dah berubah) */
+    fun setPoster(title: String, path: String) {
+        val i = shows.indexOfFirst { it.title == title }
+        if (i >= 0) {
+            val old = shows[i].poster
+            shows[i] = shows[i].copy(poster = path)
+            if (old != path) PosterStore.delete(old)
+            save()
+        } else {
+            PosterStore.delete(path)
+        }
     }
 
     /* tukar status: contoh "Now watching" → "Recent" bila dah habis tengok */
@@ -102,6 +125,7 @@ class WatchListStore(private val prefs: SharedPreferences) {
                     .put("kind", s.kind.name)
                     .put("reaction", s.reaction.name)
                     .put("status", s.status.name)
+                    .put("poster", s.poster ?: "")
             )
         }
         prefs.edit { putString("shows", array.toString()) }

@@ -18,6 +18,7 @@ import com.example.ynashouse.mood.Mood
  * - wallColor         : warna tepi atas (sambung gambar dengan skrin)
  * - floorColor        : warna tepi bawah
  * - nightWall / nightFloor : warna tepi waktu malam (kalau ada gambar malam)
+ * - focusX            : tengah bilik yang penting (0.5 = tengah gambar)
  */
 enum class HouseRoom(
     val label: String,
@@ -30,46 +31,66 @@ enum class HouseRoom(
     val wallColor: Color,
     val floorColor: Color,
     val nightWall: Color = wallColor,
-    val nightFloor: Color = floorColor
+    val nightFloor: Color = floorColor,
+    val focusX: Float = 0.5f,         // bahagian gambar yang jadi tengah skrin bila gambar di-zoom
+    @DrawableRes val rainArt: Int? = null   // gambar masa hujan (Outside & Balcony sahaja)
 ) {
     OUTSIDE(
-        "Outside", R.drawable.house_outside, R.drawable.house_outside_night, null,
-        0.5f, 0.92f, 0.38f, Color(0xFFC9E5F1), Color(0xFFCECBC0),
-        Color(0xFF45547E), Color(0xFF6A7289)
+        "Outside", R.drawable.house_outside, R.drawable.house_outside_night, Mood.OUT,
+        0.5f, 0.88f, 0.27f,                          // Yna atas laluan batu depan pintu
+        Color(0xFFC9E5F1), Color(0xFFCECBC0),
+        Color(0xFF45547E), Color(0xFF6A7289),
+        rainArt = R.drawable.house_outside_rain
     ),
     KITCHEN(
         "Kitchen", R.drawable.room_kitchen, R.drawable.room_kitchen, Mood.EATING,
-        0.36f, 0.92f, 0.44f, Color(0xFFFBF4E6), Color(0xFFE2D1C0)
+        0.36f, 0.9f, 0.32f, Color(0xFFFBF4E6), Color(0xFFE2D1C0), focusX = 0.55f
     ),
     GACHA(
         "Gacha room", R.drawable.room_gacha, R.drawable.room_gacha, Mood.STRESS_EATING,
-        0.55f, 0.92f, 0.44f, Color(0xFFFBF4E7), Color(0xFFE1CFBF)
+        0.6f, 0.88f, 0.31f, Color(0xFFFBF4E7), Color(0xFFE1CFBF), focusX = 0.46f
     ),
     PLAYROOM(
         "Playroom", R.drawable.room_playroom, R.drawable.room_playroom, Mood.GAMING,
-        0.5f, 0.86f, 0.44f, Color(0xFFFBF4E7), Color(0xFFDFCDBE)
+        0.58f, 0.88f, 0.34f, Color(0xFFFBF4E7), Color(0xFFDFCDBE), focusX = 0.45f
     ),
     THEATER(
         "Theater", R.drawable.room_theater, R.drawable.room_theater, Mood.WATCHING,
-        0.5f, 0.97f, 0.42f, Color(0xFFF9F2E7), Color(0xFFDDCBBD)
+        0.5f, 0.79f, 0.28f, Color(0xFFF9F2E7), Color(0xFFDDCBBD)   // Yna duduk atas sofa
     ),
     RADIO(
-        "Music room", R.drawable.room_radio, R.drawable.room_radio, null,
-        0.5f, 0.92f, 0.42f, Color(0xFFF8F1E6), Color(0xFFDBC9BA)
+        "Music room", R.drawable.room_radio, R.drawable.room_radio, Mood.MUSIC,
+        0.78f, 0.9f, 0.34f, Color(0xFFF8F1E6), Color(0xFFDBC9BA), focusX = 0.55f   // Yna menari tepi kerusi
     ),
     DESK(
         "Computer desk", R.drawable.room_desk, R.drawable.room_desk, Mood.CODING,
-        0.5f, 0.92f, 0.44f, Color(0xFFF9F1E5), Color(0xFFDECDBC)
+        0.75f, 0.755f, 0.3f, Color(0xFFF9F1E5), Color(0xFFDECDBC), focusX = 0.57f   // Yna dalam beanbag
     ),
     BEDROOM(
         "Bedroom", R.drawable.room_bedroom, R.drawable.room_bedroom, Mood.SLEEPING,
-        0.47f, 0.80f, 0.50f, Color(0xFFF7F0E4), Color(0xFFDCCABA)
+        0.49f, 0.745f, 0.34f, Color(0xFFF7F0E4), Color(0xFFDCCABA)   // Yna baring atas katil
     ),
     BALCONY(
-        "Balcony", R.drawable.room_balcony, R.drawable.room_balcony_night, null,
-        0.5f, 0.92f, 0.42f, Color(0xFFF6EFE4), Color(0xFFF0ECE9),
-        Color(0xFF6A6E7F), Color(0xFF606C86)
+        "Balcony", R.drawable.room_balcony, R.drawable.room_balcony_night, Mood.CHILLING,
+        0.49f, 0.69f, 0.22f,                         // Yna duduk atas bangku
+        Color(0xFFF6EFE4), Color(0xFFF0ECE9),
+        Color(0xFF6A6E7F), Color(0xFF606C86),
+        rainArt = R.drawable.room_balcony_rain
     );
+
+    /* emoji bilik (untuk HUD nama bilik) */
+    val emoji: String
+        get() = when (this) {
+            OUTSIDE -> "🏡"
+            KITCHEN -> "🍳"
+            GACHA -> "🎰"
+            PLAYROOM -> "🕹️"
+            THEATER -> "🎬"
+            RADIO -> "🎵"
+            DESK -> "💻"
+            BEDROOM -> "🌙"
+            BALCONY -> "🌿"
+        }
 
     companion object {
         /* bilik untuk sesuatu mood */

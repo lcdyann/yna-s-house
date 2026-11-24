@@ -89,6 +89,12 @@ fun ynaPose(state: YnaHouseState, now: Long, showReaction: Reaction? = null): In
         Mood.STRESS_EATING -> frames(now, 450, R.drawable.yna_stress_eat_1, R.drawable.yna_stress_eat_2)
         Mood.EATING -> frames(now, 600, R.drawable.yna_eat_1, R.drawable.yna_eat_2)
         Mood.SLEEPING -> frames(now, 1400, R.drawable.yna_sleep_1, R.drawable.yna_sleep_2)
+        // dengar lagu: Yna bergoyang ikut rentak (4 frame bop)
+        Mood.MUSIC -> frames(now, 300, R.drawable.yna_bop_1, R.drawable.yna_bop_2, R.drawable.yna_bop_3, R.drawable.yna_bop_4)
+        // keluar rumah: Yna lambai-lambai depan pintu
+        Mood.OUT -> frames(now, 700, R.drawable.yna_excited, R.drawable.yna_happy)
+        // balkoni: minum cola sambil ambil angin
+        Mood.CHILLING -> frames(now, 1600, R.drawable.yna_cola, R.drawable.yna_happy)
     }
 }
 
